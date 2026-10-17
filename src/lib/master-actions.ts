@@ -325,12 +325,31 @@ export async function deleteTaxAction(
     };
   }
 
-  try {
-    await prisma.tax.delete({ where: { id } });
-  } catch {
-    return { ok: false, error: "Gagal menghapus pajak." };
-  }
-
   refreshMaster();
   return { ok: true };
+}
+
+/* ================= SETTING PERUSAHAAN ================= */
+
+export async function updateCompanySettingAction(
+  formData: FormData
+): Promise<{ ok: boolean; error?: string }> {
+  const companyName = str(formData.get("companyName")) || "Perusahaan Saya";
+  const npwp = str(formData.get("npwp"));
+  const address = str(formData.get("address"));
+  const fiscalYearStart = num(formData.get("fiscalYearStart")) || 1;
+
+  try {
+    await prisma.setting.upsert({
+      where: { id: 1 },
+      update: { companyName, npwp, address, fiscalYearStart },
+      create: { id: 1, companyName, npwp, address, fiscalYearStart },
+    });
+    revalidatePath("/");
+    revalidatePath("/setup");
+    return { ok: true };
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : "Gagal menyimpan data usaha";
+    return { ok: false, error: msg };
+  }
 }
