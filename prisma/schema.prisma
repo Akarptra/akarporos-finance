@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Dev pakai SQLite. Untuk Vercel: ganti provider ke "postgresql",
+// set DATABASE_URL ke Neon/Vercel Postgres, lalu `prisma db push`.
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Setting {
+  id             Int    @id @default(1)
+  companyName    String @default("Perusahaan Saya")
+  npwp           String @default("")
+  address        String @default("")
+  fiscalYearStart Int   @default(1) // bulan awal fiskal (1 = Januari)
+}
+
+model Account {
+  id           Int           @id @default(autoincrement())
+  code         String        @unique
+  name         String
+  type         String // ASSET | LIABILITY | EQUITY | REVENUE | EXPENSE
+  alias        String? // slot sistem: KAS,BANK,AR,AP,INVENTORY,VAT_IN,VAT_OUT,SALES,HPP
+  isCash       Boolean       @default(false) // akun kas/bank → dipakai Arus Kas + form bayar
+  isGroup      Boolean       @default(false)
+  parentId     Int?
+  parent       Account?      @relation("AccountTree", fields: [parentId], references: [id])
+  children     Account[]     @relation("AccountTree")
+  journalLines JournalLine[]
+  payments     Payment[]
+  itemExpenses Item[]     @relation("ItemExpense")
+  createdAt    DateTime   @default(now())
+}
+
+model Partner {
+  id           Int           @id @default(autoincrement())
+  type         String // CUSTOMER | VENDOR | BOTH
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  npwp         String?
+  termsDays    Int           @default(30)
+  invoices     Invoice[]
+  payments     Payment[]
+  journalLines JournalLine[]
+  createdAt    DateTime      @default(now())
+}
+
+model Item {
+  id            Int           @id @default(autoincrement())
+  code          String        @unique
+  name          String
+  type          String // PRODUCT | SERVICE
+  unit          String        @default("pcs")
+  sellPrice     Int           @default(0)
+  costPrice     Int           @default(0)
+  expenseAcctId Int? // akun debit saat beli (khusus jasa); barang = Persediaan
+  expenseAcct   Account?      @relation("ItemExpense", fields: [expenseAcctId], references: [id])
+  revenueAcctId Int?
+  isActive      Boolean       @default(true)
+  invoiceLines  InvoiceLine[]
+  stockMoves    StockMove[]
+  createdAt     DateTime      @default(now())
+}
+
+// Kartu stok perpetual: tiap barang masuk/keluar tercatat + harga pokok.
+// Rata-rata bergerak dihitung dari urutan (date, id) sehingga HPP akurat.
+model StockMove {
+  id       Int      @id @default(autoincrement())
+  date     DateTime
+  itemId   Int
+  item     Item     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  type     String // IN | OUT
+  qty      Int
+  unitCost Int      @default(0) // harga pokok per unit (OUT = rata-rata bergerak saat keluar)
+  refType  String // PURCHASE_INVOICE | SALES_INVOICE
+  refId    Int
+  memo     String?
+  createdAt DateTime @default(now())
+
+  @@index([itemId, date])
+}
+
+model Tax {
+  id           Int           @id @default(autoincrement())
+  code         String        @unique
+  name         String
+  rate         Float // 0.11, 0.12, 0.02 ...
+  type         String // OUTPUT | INPUT | NONE
+  active       Boolean       @default(true)
+  invoiceLines InvoiceLine[]
+}
+
+model JournalEntry {
+  id          Int           @id @default(autoincrement())
+  date        DateTime
+  memo        String
+  reference   String?
+  sourceType  String // MANUAL | SALES_INVOICE | PURCHASE_INVOICE | PAYMENT_IN | PAYMENT_OUT
+  sourceId    Int?
+  createdAt   DateTime      @default(now())
+  lines       JournalLine[]
+  invoice     Invoice?
+  payment     Payment?
+}
+
+model JournalLine {
+  id        Int           @id @default(autoincrement())
+  entryId   Int
+  entry     JournalEntry  @relation(fields: [entryId], references: [id], onDelete: Cascade)
+  accountId Int
+  account   Account       @relation(fields: [accountId], references: [id])
+  debit     Int           @default(0)
+  credit    Int           @default(0)
+  memo      String?
+  partnerId Int?
+  partner   Partner?      @relation(fields: [partnerId], references: [id])
+}
+
+model Invoice {
+  id             Int           @id @default(autoincrement())
+  type           String // SALES | PURCHASE
+  number         String        @unique
+  date           DateTime
+  dueDate        DateTime
+  partnerId      Int
+  partner        Partner       @relation(fields: [partnerId], references: [id])
+  subtotal       Int           @default(0)
+  discount       Int           @default(0)
+  taxAmount      Int           @default(0)
+  total          Int           @default(0)
+  paid           Int           @default(0)
+  status         String        @default("POSTED") // DRAFT | POSTED | PAID | VOID
+  journalEntryId Int?          @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  lines          InvoiceLine[]
+  payments       Payment[]
+  createdAt      DateTime      @default(now())
+}
+
+model InvoiceLine {
+  id          Int           @id @default(autoincrement())
+  invoiceId   Int
+  invoice     Invoice       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  itemId      Int?
+  item        Item?         @relation(fields: [itemId], references: [id])
+  description String
+  qty         Int           @default(1)
+  price       Int           @default(0)
+  discount    Int           @default(0)
+  taxId       Int?
+  tax         Tax?          @relation(fields: [taxId], references: [id])
+  amount      Int           @default(0) // (qty*price) - discount, sebelum pajak
+}
+
+model Payment {
+  id             Int           @id @default(autoincrement())
+  type           String // IN | OUT
+  number         String        @unique
+  date           DateTime
+  partnerId      Int
+  partner        Partner       @relation(fields: [partnerId], references: [id])
+  accountId      Int // akun bank/kas asal dana
+  account        Account       @relation(fields: [accountId], references: [id])
+  amount         Int
+  memo           String?
+  invoiceId      Int?
+  invoice        Invoice?      @relation(fields: [invoiceId], references: [id])
+  journalEntryId Int?          @unique
+  journalEntry   JournalEntry? @relation(fields: [journalEntryId], references: [id])
+  createdAt      DateTime      @default(now())
+}

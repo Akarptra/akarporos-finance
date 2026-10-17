@@ -1,7 +1,10 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  outputFileTracingIncludes: {
+    "/*": ["./prisma/dev.db"],
+  },
   experimental: {
-    serverComponentsExternalPackages: ["better-sqlite3"],
+    serverActions: { bodySizeLimit: "2mb" },
   },
 };
 
