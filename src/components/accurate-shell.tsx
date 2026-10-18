@@ -262,7 +262,7 @@ const COLOR_CLASSES = {
 
 export function AccurateShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (pathname === '/ui') {
+  if (pathname === '/' || pathname === '/ui') {
     return <>{children}</>;
   }
   const router = useRouter();
