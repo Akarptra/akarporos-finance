@@ -262,6 +262,9 @@ const COLOR_CLASSES = {
 
 export function AccurateShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  if (pathname === '/ui') {
+    return <>{children}</>;
+  }
   const router = useRouter();
 
   // Pre-seed Dashboard and Persiapan Data Perusahaan as initial tabs (matching screenshot 21)
@@ -437,6 +440,9 @@ export function AccurateShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-1.5">
               <span className="text-sm font-black tracking-tight text-[#D32F2F]">ACCURATE</span>
               <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-600">ONLINE</span>
+            <Link href="/ui" className="ml-2 inline-flex items-center gap-1 rounded bg-[#EBF3FC] px-2 py-0.5 text-[11px] font-semibold text-[#1D4ED8] border border-[#C3DCFA] hover:bg-[#DDEBFA] transition" title="Buka UI Workspace Clone">
+              ✨ Workspace UI Clone ↗
+            </Link>
             </div>
 
             {/* Global Search Input */}
